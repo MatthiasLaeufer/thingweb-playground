@@ -1,0 +1,41 @@
+{
+    "title": "td-property-arrays",
+    "description": "(In a property member value) The type of the members forms, required, enum, scopes, and security MUST be serialized as a JSON array.",
+    "$schema ": "http://json-schema.org/draft-06/schema#",
+    "is-complex":false,
+    "type": "object",
+    "properties": {
+        "properties": {
+            "additionalProperties": {
+                "$ref": "#/definitions/property_element"
+            }
+        }
+    },
+    "required": [
+        "properties"
+    ],
+    "additionalProperties": true,
+    "definitions": {
+        "property_element": {
+            "type": "object",
+            "properties": {
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "security": {
+                    "type": "array"
+                },
+                "forms": {
+                    "type": "array"
+                }
+            },
+            "required": [
+                "scopes", "security", "forms"
+            ],
+            "additionalProperties": true
+        }
+    }
+}

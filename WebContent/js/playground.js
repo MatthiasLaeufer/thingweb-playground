@@ -57,9 +57,10 @@ function reset(id) {
 function validate() {
     var text = $('#td-text').val();
     reset('spot-json');
-    reset('spot-json-schema');
+    reset('spot-simple-json-schema');
+    reset('spot-full-json-schema');
     reset('spot-json-ld');
-    reset('spot-owl');
+    reset('spot-add');
     trigger('validate-json', text);
 }
 
@@ -68,112 +69,143 @@ function log(message) {
     pgConsole.append(message + '&#13;&#10;');
 }
 
+function clearLog() {
+    var pgConsole = $('#console');
+    pgConsole.empty();
+    pgConsole.append("Reset! Waiting for validation... " + '&#13;&#10;');
+    reset('spot-json');
+    reset('spot-simple-json-schema');
+    reset('spot-full-json-schema');
+    reset('spot-json-ld');
+    reset('spot-add');
+}
+
 $(function () {
 
     $('#td-text').linedtextarea();
-    $.getJSON('td-schema-lyon.json', function (schema) {
+    $.getJSON('td-schema.json', function (schema) {
 
-        ajv = Ajv();
-        $.getJSON('json-schema-draft-06.json', function (draft) {
 
-            ajv.addMetaSchema(draft);
-            ajv.addSchema(schema, 'td');
-            document.addEventListener('validate-json', function (e) {
+        $.getJSON('td-schema-full.json', function (schemaFull) {
 
-                try {
-                    tdJson = JSON.parse(e.detail);
-                    light('OK', 'spot-json');
-                    log('JSON validation... OK');
-                    trigger('validate-json-schema', tdJson);
-                } catch (err) {
-                    if (err instanceof SyntaxError) {
-                        light('KO', 'spot-json');
-                        log('X JSON validation... KO:');
-                        log('> ' + err.message);
-                    }
-                }
-            }, false);
+            ajv = Ajv();
+            $.getJSON('json-schema-draft-06.json', function (draft) {
 
-            document.addEventListener('validate-json-schema', function (e) {
-                if (tdJson.hasOwnProperty('properties') || tdJson.hasOwnProperty('actions') || tdJson.hasOwnProperty('events')) {
-                    if (!tdJson.hasOwnProperty('base')) {
-                        //no need to do something. Each href should be absolute
-                        log(':) Tip: Without base, each href should be an absolute URL');
-                    } else {
-                        //need to check if base finishes with / or not
-                        //if it does, hrefs shouldnt start with it, if it doesnt, then hrefs must start with it
-                        //QUESTION should there be separate schemas or transformation?
-                        try {
-                            tdJson = transformHref(tdJson);
-                        } catch (err) {
-                            light('KO', 'spot-json-schema');
-                            log('X JSON Schema validation... KO:');
-                            log('> ' + err);
-                            return;
+                ajv.addMetaSchema(draft);
+                ajv.addSchema(schema, 'td');
+                ajv.addSchema(schemaFull, 'td-full');
+
+                document.addEventListener('validate-json', function (e) {
+                    try {
+                        log('------- New Validation Started -------');
+                        tdJson = JSON.parse(e.detail);
+                        light('OK', 'spot-json');
+                        log('JSON validation... OK');
+                        trigger('validate-simple-json-schema', tdJson);
+                    } catch (err) {
+                        console.log(err);
+                        if (err instanceof SyntaxError) {
+                            light('KO', 'spot-json');
+                            log('X JSON validation... KO:');
+                            log('> ' + err.message);
                         }
                     }
+                }, false);
 
-                }
+                document.addEventListener('validate-simple-json-schema', function (e) {
+                    if (tdJson.hasOwnProperty('properties') || tdJson.hasOwnProperty('actions') || tdJson.hasOwnProperty('events')) {
+                        if (!tdJson.hasOwnProperty('base')) {
+                            //no need to do something. Each href should be absolute
+                            log(':) Tip: Without base, each href should be an absolute URL');
+                        } else {
+                            //need to check if base finishes with / or not
+                            //if it does, hrefs shouldnt start with it, if it doesnt, then hrefs must start with it
+                            //QUESTION should there be separate schemas or transformation?
+                            try {
+                                tdJson = transformHref(tdJson);
+                            } catch (err) {
+                                light('KO', 'spot-simple-json-schema');
+                                log('X JSON Schema validation... KO:');
+                                log('> ' + err);
+                                return;
+                            }
+                        }
 
-                var valid = ajv.validate('td', tdJson);
-                //used to be var valid = ajv.validate('td', e.detail);
-                if (valid) {
-                    light('OK', 'spot-json-schema');
-                    log('JSON Schema validation... OK');
+                    }
+
+                    var valid = ajv.validate('td', tdJson);
+                    //used to be var valid = ajv.validate('td', e.detail);
+                    if (valid) {
+                        light('OK', 'spot-simple-json-schema');
+                        log('JSON Schema validation... OK');
+                        trigger('validate-full-json-schema', tdJson);
+                    } else {
+                        light('KO', 'spot-simple-json-schema');
+                        log('X JSON Schema validation... KO:');
+                        //console.log(ajv.errors);
+                        log('> ' + ajv.errorsText());
+                        console.log(JSON.stringify(ajv.errors));
+                    }
+
+
+                }, false);
+
+                document.addEventListener('validate-full-json-schema', function (e) {
+                    var tdJson = e.detail;
+                    var valid = ajv.validate('td-full', tdJson);
+                    //used to be var valid = ajv.validate('td', e.detail);
+                    if (valid) {
+                        light('OK', 'spot-full-json-schema');
+                        log('JSON Schema validation... OK');
+                        trigger('validate-json-ld', tdJson);
+                    } else {
+                        light('KO', 'spot-full-json-schema');
+                        log('X JSON Schema validation... KO:');
+                        //console.log(ajv.errors);
+                        log('> ' + ajv.errorsText());
+                        console.log(JSON.stringify(ajv.errors));
+                        trigger('validate-json-ld', tdJson);
+                    }
+
+
+                }, false);
+
+                document.addEventListener('validate-json-ld', function (e) {
+                    jsonld.toRDF(e.detail, {
+                        format: 'application/nquads'
+                    }, function (err, triples) {
+                        if (!err) {
+                            light('OK', 'spot-json-ld');
+                            log('JSON-LD validation... OK');
+                            trigger('validate-add', triples);
+                        } else {
+                            light('KO', 'spot-json-ld');
+                            log('X JSON-LD validation... KO:');
+                            log('> ' + err);
+                        }
+                    });
+                }, false);
+
+                document.addEventListener('validate-add', function (e) {
+
+                    log('Additional checks...');
+
+                    light('OK', 'spot-add');
+
+                    //can produce only warning
                     checkEnumConst(tdJson);
                     checkPropItems(tdJson);
                     checkInteractions(tdJson);
+
+                    //can produce error
                     checkSecurity(tdJson);
-                    trigger('validate-json-ld', e.detail);
-                } else {
-                    light('KO', 'spot-json-schema');
-                    log('X JSON Schema validation... KO:');
-                    //console.log(ajv.errors);
-                    log('> ' + ajv.errorsText());
-                }
+                    checkUniqueness(tdJson);
 
 
-            }, false);
+                }, false);
 
-            document.addEventListener('validate-json-ld', function (e) {
-                jsonld.toRDF(e.detail, {
-                    format: 'application/nquads'
-                }, function (err, triples) {
-                    if (!err) {
-                        light('OK', 'spot-json-ld');
-                        log('JSON-LD validation... OK');
-                        trigger('validate-owl', triples);
-                    } else {
-                        light('KO', 'spot-json-ld');
-                        log('X JSON-LD validation... KO:');
-                        log('> ' + err);
-                    }
-                });
-            }, false);
-
-            // document.addEventListener('validate-owl', function(e) {
-            //     $.post({
-            //         url: 'sem',
-            //         data: e.detail,
-            //         contentType: 'application/nquads',
-            //         success: function(diagnosis) {
-            //             if (diagnosis.valid) {
-            //                 light(true, 'spot-owl');
-            //                 log('TD/OWL validation... OK');
-            //             } else {
-            //                 light(false, 'spot-owl');
-            //                 log('TD/OWL validation... KO!');
-            //             }
-            //         }
-            //     });
-            // }, false);
-            document.addEventListener('validate-owl', function (e) {
-                light('OK', 'spot-owl');
-                log('TD/OWL validation... OK');
-
-            }, false);
-
-            $('#td-validate').removeAttr('disabled');
+                $('#td-validate').removeAttr('disabled');
+            });
         });
     });
 });
@@ -412,8 +444,9 @@ function checkEnumConst(td) {
             var curPropertyName = tdProperties[i];
             var curProperty = td.properties[curPropertyName];
             if (curProperty.hasOwnProperty("enum") && curProperty.hasOwnProperty("const")) {
-                light('WARNING', 'spot-json-schema');
+                light('WARNING', 'spot-add');
                 log('! In property ' + curPropertyName + ' enum and const are used at the same time, the values in enum can never be valid in the received JSON value');
+                return false;
             }
         }
     }
@@ -427,14 +460,15 @@ function checkEnumConst(td) {
                 var curInput = curAction.input;
                 if (curInput.hasOwnProperty("enum") && curInput.hasOwnProperty("const")) {
                     log('! In the input of action ' + curActionName + ' enum and const are used at the same time, the values in enum can never be valid in the received JSON value');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
                 }
             }
             if (curAction.hasOwnProperty("output")) {
                 var curOutput = curAction.output;
                 if (curOutput.hasOwnProperty("enum") && curOutput.hasOwnProperty("const")) {
                     log('! In the output of action ' + curActionName + ' enum and const are used at the same time, the values in enum can never be valid in the received JSON value');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
+                    return false;
                 }
             }
         }
@@ -447,11 +481,12 @@ function checkEnumConst(td) {
             var curEvent = td.events[curEventName];
             if (curEvent.hasOwnProperty("enum") && curEvent.hasOwnProperty("const")) {
                 log('! In event ' + curEventName + ' enum and const are used at the same time, the values in enum can never be valid in the received JSON value');
-                light('WARNING', 'spot-json-schema');
+                light('WARNING', 'spot-add');
+                return false;
             }
         }
     }
-    return;
+    return true;
 }
 
 //checking whether a data schema has object but not properties, array but no items
@@ -466,11 +501,13 @@ function checkPropItems(td) {
             if (curProperty.hasOwnProperty("type")) {
                 if ((curProperty.type == "object") && !(curProperty.hasOwnProperty("properties"))) {
                     log('! In property ' + curPropertyName + ', the type is object but its properties are not specified');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
+                    return false;
                 }
                 if ((curProperty.type == "array") && !(curProperty.hasOwnProperty("items"))) {
                     log('! In property ' + curPropertyName + ', the type is array but its items are not specified');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
+                    return false;
                 }
             }
         }
@@ -487,11 +524,13 @@ function checkPropItems(td) {
                 if (curInput.hasOwnProperty("type")) {
                     if ((curInput.type == "object") && !(curInput.hasOwnProperty("properties"))) {
                         log('! In the input of action ' + curActionName + ', the type is object but its properties are not specified');
-                        light('WARNING', 'spot-json-schema');
+                        light('WARNING', 'spot-add');
+                        return false;
                     }
                     if ((curInput.type == "array") && !(curInput.hasOwnProperty("items"))) {
                         log('! In the output of action ' + curActionName + ', the type is array but its items are not specified');
-                        light('WARNING', 'spot-json-schema');
+                        light('WARNING', 'spot-add');
+                        return false;
                     }
                 }
             }
@@ -500,11 +539,13 @@ function checkPropItems(td) {
                 if (curOutput.hasOwnProperty("type")) {
                     if ((curOutput.type == "object") && !(curOutput.hasOwnProperty("properties"))) {
                         log('! In the output of action ' + curActionName + ', the type is object but its properties are not specified');
-                        light('WARNING', 'spot-json-schema');
+                        light('WARNING', 'spot-add');
+                        return false;
                     }
                     if ((curOutput.type == "array") && !(curOutput.hasOwnProperty("items"))) {
                         log('! In the output of action ' + curActionName + ', the type is array but its items are not specified');
-                        light('WARNING', 'spot-json-schema');
+                        light('WARNING', 'spot-add');
+                        return false;
                     }
                 }
             }
@@ -520,11 +561,13 @@ function checkPropItems(td) {
             if (curEvent.hasOwnProperty("type")) {
                 if ((curEvent.type == "object") && !(curEvent.hasOwnProperty("properties"))) {
                     log('! In event ' + curEventName + ', the type is object but its properties are not specified');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
+                    return false;
                 }
                 if ((curEvent.type == "array") && !(curEvent.hasOwnProperty("items"))) {
                     log('! In event ' + curEventName + ', the type is array but its items are not specified');
-                    light('WARNING', 'spot-json-schema');
+                    light('WARNING', 'spot-add');
+                    return false;
                 }
             }
 
@@ -537,84 +580,170 @@ function checkPropItems(td) {
 function checkInteractions(td) {
     if (td.hasOwnProperty("interactions")) {
         log('interactions are from the previous TD Specification, please use properties, actions, events instead');
-        light('WARNING', 'spot-json-schema');
+        light('WARNING', 'spot-add');
+        return false;
     }
     if (td.hasOwnProperty("interaction")) {
         log('interaction are from the previous TD Specification, please use properties, actions, events instead');
-        light('WARNING', 'spot-json-schema');
+        light('WARNING', 'spot-add');
+        return false;
     }
     return;
 }
 
+function arrayContainsOtherArray(parent, child) {
+
+    return child.every(elem => parent.indexOf(elem) > -1);
+}
+
 function checkSecurity(td) {
-    if (td.hasOwnProperty("security")) {
-        //all good
-    } else {
+    if (td.hasOwnProperty("securityDefinitions")) {
+        var securityDefinitionsObject = td.securityDefinitions;
+        var securityDefinitions = Object.keys(securityDefinitionsObject);
+
+
+        var rootSecurity = td.security;
+
+        if (arrayContainsOtherArray(securityDefinitions, rootSecurity)) {
+            // all good
+        } else {
+            log('KO Error: Security key in the root of the TD has security schemes not defined by the securityDefinitions');
+            light('KO', 'spot-add');
+            return false;
+        }
 
         if (td.hasOwnProperty("properties")) {
-            //checking properties
+            //checking security in property level
             tdProperties = Object.keys(td.properties);
             for (var i = 0; i < tdProperties.length; i++) {
                 var curPropertyName = tdProperties[i];
                 var curProperty = td.properties[curPropertyName];
                 if (curProperty.hasOwnProperty("security")) {
-                    //all good
-                } else {
-                    var curForms = curProperty.forms;
-                    for (var j = 0; j < curForms.length; j++) {
-                        var curForm = curForms[j];
-                        if (curForm.hasOwnProperty("security")) {
-                            //all good
+                    var curSecurity = curProperty.security;
+                    if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                        // all good
+                    } else {
+                        log('KO Error: Security key in property ' + curPropertyName + '  has security schemes not defined by the securityDefinitions');
+                        light('KO', 'spot-add');
+                        return false;
+                    }
+                }
+
+                // checking security in forms level
+                var curForms = curProperty.forms;
+                for (var j = 0; j < curForms.length; j++) {
+                    var curForm = curForms[j];
+                    if (curForm.hasOwnProperty("security")) {
+                        var curSecurity = curForm.security;
+                        if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                            // all good
                         } else {
-                            log('KO Error: In property ' + curPropertyName + `, form ` + j + ' has no security scheme. TD should have either in the root OR for every form OR for every interaction');
-                            light('KO', 'spot-json-schema');
-                        }
-                    }
-                }
-            }
-            if (td.hasOwnProperty("actions")) {
-                tdActions = Object.keys(td.actions);
-                for (var i = 0; i < tdActions.length; i++) {
-                    var curActionName = tdActions[i];
-                    var curAction = td.actions[curActionName];
-                    if (curAction.hasOwnProperty("security")) {
-                        //all good
-                    } else {
-                        var curForms = curAction.forms;
-                        for (var j = 0; j < curForms.length; j++) {
-                            var curForm = curForms[j];
-                            if (curForm.hasOwnProperty("security")) {
-                                //all good
-                            } else {
-                                log('KO Error: In action ' + curActionName + `, form ` + j + ' has no security scheme. TD should have either in the root OR for every form OR for every interaction');
-                                light('KO', 'spot-json-schema');
-                            }
-                        }
-                    }
-                }
-            }
-            if (td.hasOwnProperty("events")) {
-                tdEvents = Object.keys(td.events);
-                for (var i = 0; i < tdEvents.length; i++) {
-                    var curEventName = tdEvents[i];
-                    var curEvent = td.events[curEventName];
-                    if (curEvent.hasOwnProperty("security")) {
-                        //all good
-                    } else {
-                        var curForms = curEvent.forms;
-                        for (var j = 0; j < curForms.length; j++) {
-                            var curForm = curForms[j];
-                            if (curForm.hasOwnProperty("security")) {
-                                //all good
-                            } else {
-                                log('KO Error: In event ' + curEventName + `, form ` + j + ' has no security scheme. TD should have either in the root OR for every form OR for every interaction');
-                                light('KO', 'spot-json-schema');
-                            }
+                            log('KO Error: Security key in form ' + j + ' in property ' + curPropertyName + '  has security schemes not defined by the securityDefinitions');
+                            light('KO', 'spot-add');
+                            return false;
                         }
                     }
                 }
             }
         }
+
+        if (td.hasOwnProperty("actions")) {
+            //checking security in action level
+            tdActions = Object.keys(td.actions);
+            for (var i = 0; i < tdActions.length; i++) {
+                var curActionName = tdActions[i];
+                var curAction = td.actions[curActionName];
+                if (curAction.hasOwnProperty("security")) {
+                    var curSecurity = curAction.security;
+                    if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                        // all good
+                    } else {
+                        log('KO Error: Security key in action ' + curActionName + '  has security schemes not defined by the securityDefinitions');
+                        light('KO', 'spot-add');
+                        return false;
+                    }
+                }
+                // checking security in forms level 
+                var curForms = curAction.forms;
+                for (var j = 0; j < curForms.length; j++) {
+                    var curForm = curForms[j];
+                    if (curForm.hasOwnProperty("security")) {
+                        var curSecurity = curForm.security;
+                        if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                            // all good
+                        } else {
+                            log('KO Error: Security key in form ' + j + ' in action ' + curActionName + '  has security schemes not defined by the securityDefinitions');
+                            light('KO', 'spot-add');
+                            return false;
+                        }
+                    }
+                }
+
+            }
+        }
+
+        if (td.hasOwnProperty("events")) {
+            //checking security in event level
+            tdEvents = Object.keys(td.events);
+            for (var i = 0; i < tdEvents.length; i++) {
+                var curEventName = tdEvents[i];
+                var curEvent = td.events[curEventName];
+                if (curEvent.hasOwnProperty("security")) {
+                    var curSecurity = curEvent.security;
+                    if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                        // all good
+                    } else {
+                        log('KO Error: Security key in event ' + curEventName + '  has security schemes not defined by the securityDefinitions');
+                        light('KO', 'spot-add');
+                        return false;
+                    }
+                }
+                // checking security in forms level
+                var curForms = curEvent.forms;
+                for (var j = 0; j < curForms.length; j++) {
+                    var curForm = curForms[j];
+                    if (curForm.hasOwnProperty("security")) {
+                        var curSecurity = curForm.security;
+                        if (arrayContainsOtherArray(securityDefinitions, curSecurity)) {
+                            // all good
+                        } else {
+                            log('KO Error: Security key in form ' + j + ' in event ' + curEventName + '  has security schemes not defined by the securityDefinitions');
+                            light('KO', 'spot-add');
+                            return false;
+                        }
+                    }
+                }
+
+            }
+        }
+    } else {
+        log('KO Error: securityDefinitions is mandatory');
+        light('KO', 'spot-add');
+        return false;
     }
     return;
+}
+
+function checkUniqueness(td) {
+
+    // building the interaction name array
+    var tdInteractions = [];
+    if (td.hasOwnProperty("properties")) {
+        tdInteractions = tdInteractions.concat(Object.keys(td.properties));
+    }
+    if (td.hasOwnProperty("actions")) {
+        tdInteractions = tdInteractions.concat(Object.keys(td.actions));
+    }
+    if (td.hasOwnProperty("events")) {
+        tdInteractions = tdInteractions.concat(Object.keys(td.events));
+    }
+    // checking uniqueness
+
+    isDuplicate = (new Set(tdInteractions)).size !== tdInteractions.length;
+
+    if (isDuplicate) {
+        log('KO Error: Duplicate names are not allowed in Interactions');
+        light('KO', 'spot-add');
+        return false;
+    }
 }

@@ -1,0 +1,31 @@
+{
+    "id": "urn:dev:wot:com:example:servient:lamp",
+    "name": "MyLampThing",
+    "description": "Valid TD demonstrating how to use data schema for cancellation and subscription",
+    "securityDefinitions": {
+        "basic_sc": {
+            "scheme": "basic",
+            "in": "header"
+        }
+    },
+    "security": ["basic_sc"],
+    "events": {
+        "overheating": {
+            "data": {
+                "type": "string"
+            },
+            "cancellation":{
+                "type":"integer",
+                "description":"The time in seconds before cancellation happens"
+            },
+            "subscription":{
+                "type": "string",
+                "enum":["always","once"]
+            },
+            "forms": [{
+                "href": "https://mylamp.example.com/oh",
+                "subprotocol": "longpoll"
+            }]
+        }
+    }
+}

@@ -1,0 +1,65 @@
+{
+    "id": "urn:dev:wot:com:example:servient:lamp",
+    "name": "MyLampThing",
+    "description": "Valid TD copied from the spec's first example",
+    "securityDefinitions": {
+        "basic_sc": {
+            "scheme": "basic",
+            "in": "header"
+        }
+    },
+    "security": ["basic_sc"],
+    "properties": {
+        "status": {
+            
+            "readOnly":false,
+            "writeOnly": false,
+            "forms": [{
+                "href": "https://mylamp.example.com/status"
+            }]
+        }
+    },
+    "actions": {
+        "toggle": {
+            "input": {
+                "type": "object",
+                "properties": {
+                    "test1": {
+                        "type": "string",
+                        "enum": ["test"]
+                    },
+                    "test2": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5
+                    },
+                    "test3": {
+                        "type": "number",
+                        "minimum": 1.4,
+                        "maximum": 10.4
+                    }
+                },
+                "required": ["test1"]
+            },
+            "forms": [{
+                "href": "https://mylamp.example.com/toggle"
+            }]
+        }
+    },
+    "events": {
+        "overheating": {
+            "data": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "minItems": 4,
+                "maxItems": 6
+            },
+            "forms": [{
+                "href": "https://mylamp.example.com/oh",
+                "subprotocol": "longpoll"
+            }]
+        }
+    }
+}

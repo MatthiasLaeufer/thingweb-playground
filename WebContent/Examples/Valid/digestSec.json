@@ -1,0 +1,21 @@
+{
+    "id": "urn:dev:wot:com:example:servient:lamp",
+    "name": "MyLampThing",
+    "description": "Valid TD demonstrating how to use the digest scheme",
+    "securityDefinitions": {
+        "digest_sc": {
+            "scheme": "digest",
+            "qop": "auth",
+            "in":"header"
+        }
+    },
+    "security": ["digest_sc"],
+    "properties": {
+        "status": {
+            "type": "string",
+            "forms": [{
+                "href": "https://mylamp.example.com/status"
+            }]
+        }
+    }
+}
